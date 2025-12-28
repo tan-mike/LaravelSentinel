@@ -102,10 +102,14 @@ export const api = {
   },
 
   fetchProjects: async (includeIgnored = false): Promise<Project[]> => {
-    const url = includeIgnored ? `${BASE_URL}/projects?include_ignored=true` : `${BASE_URL}/projects`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error('Failed to fetch projects');
-    return res.json();
+    try {
+      const url = includeIgnored ? `${BASE_URL}/projects?include_ignored=true` : `${BASE_URL}/projects`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      return res.json();
+    } catch {
+      return [];
+    }
   },
 
   fetchTelemetry: async (): Promise<TelemetryStatus> => {

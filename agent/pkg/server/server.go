@@ -16,6 +16,7 @@ type Server struct {
 	Runner   *runner.Manager
 	Store    *telemetry.Store
 	Watchdog *watchdog.Watchdog
+	Monitor  *telemetry.Monitor
 }
 
 func NewServer(cfg *config.Config) *Server {
@@ -24,6 +25,7 @@ func NewServer(cfg *config.Config) *Server {
 		Runner:   runner.NewManager(),
 		Store:    telemetry.NewStore(100),
 		Watchdog: watchdog.New(),
+		Monitor:  telemetry.NewMonitor(),
 	}
 }
 
@@ -81,7 +83,7 @@ func (s *Server) startWatchdogLoop() {
 	// Ticker every 5 seconds to reduce load
 	ticker := time.NewTicker(5 * time.Second)
 	for range ticker.C {
-		stats := telemetry.GetSystemStats()
+		stats := s.Monitor.GetSystemStats()
 
 		// Run Check
 		if s.Watchdog != nil {

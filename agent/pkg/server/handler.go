@@ -12,7 +12,6 @@ import (
 	"github.com/mike/sentinel-agent/pkg/config"
 	"github.com/mike/sentinel-agent/pkg/laravel"
 	"github.com/mike/sentinel-agent/pkg/project"
-	"github.com/mike/sentinel-agent/pkg/telemetry"
 )
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
@@ -37,7 +36,7 @@ func (s *Server) handleProjects(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTelemetry(w http.ResponseWriter, r *http.Request) {
-	status := telemetry.GetStatus()
+	status := s.Monitor.GetStatus()
 	json.NewEncoder(w).Encode(status)
 }
 

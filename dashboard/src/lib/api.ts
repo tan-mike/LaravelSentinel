@@ -151,9 +151,13 @@ export const api = {
   },
 
   fetchLogs: async (projectPath: string): Promise<LogsParsed> => {
-      const res = await fetch(`${BASE_URL}/projects/logs?path=${encodeURIComponent(projectPath)}`);
-      if(!res.ok) throw new Error('Failed to fetch logs');
-      return res.json();
+      try {
+        const res = await fetch(`${BASE_URL}/projects/logs?path=${encodeURIComponent(projectPath)}`);
+        if(!res.ok) return { lines: [] };
+        return res.json();
+      } catch {
+        return { lines: [] };
+      }
   },
 
   proxyRequest: async (method: string, url: string, headers: Record<string, string>, body: string) => {

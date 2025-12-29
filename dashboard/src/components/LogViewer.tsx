@@ -31,7 +31,7 @@ export default function LogViewer({
     try {
       setLoading(true);
       const data = await api.fetchLogs(projectPath);
-      setLogs(data.lines);
+      setLogs(data.lines || []);
       setError(null);
     } catch (e) {
       setError("Failed to load logs");
@@ -46,7 +46,7 @@ export default function LogViewer({
   }, [projectPath]);
 
   // Parsing & Filtering
-  const parsedLogs = logs.map(line => {
+  const parsedLogs = (logs || []).map(line => {
       // Regex to parse Laravel/Monolog format: [2024-12-27 15:00:00] env.LEVEL: Message
       const match = line.match(/^\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\] (\w+)\.(\w+): (.*)/);
       if (match) {

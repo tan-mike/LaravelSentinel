@@ -4,6 +4,7 @@ import (
 	"net"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/process"
@@ -23,14 +24,25 @@ type Status struct {
 	SystemStats SystemStats `json:"system_stats"`
 }
 
-func GetSystemStats() SystemStats {
-	var m runtime.MemStats
-	runtime.ReadMemStats(&m)
+type Monitor struct {
+	procs map[int32]*process.Process
+	mu    sync.Mutex
+}
 
-	webMem, cliMem, webCpu, webWorkers := getPHPStats()
+func NewMonitor() *Monitor {
+	return &Monitor{
+		procs: make(map[int32]*process.Process),
+	}
+}
+
+func (m *Monitor) GetSystemStats() SystemStats {
+	var ms runtime.MemStats
+	runtime.ReadMemStats(&ms)
+
+	webMem, cliMem, webCpu, webWorkers := m.getPHPStats()
 
 	return SystemStats{
-		MemoryUsageMB:     m.Alloc / 1024 / 1024,
+		MemoryUsageMB:     ms.Alloc / 1024 / 1024,
 		NumGoroutine:      runtime.NumGoroutine(),
 		PhpWebMemoryMB:    webMem,
 		PhpCliMemoryMB:    cliMem,
@@ -39,19 +51,36 @@ func GetSystemStats() SystemStats {
 	}
 }
 
-func getPHPStats() (int, int, float64, int) {
-	// Use gopsutil for cross-platform process monitoring
-	procs, err := process.Processes()
+func (m *Monitor) getPHPStats() (int, int, float64, int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	pids, err := process.Pids()
 	if err != nil {
 		return 0, 0, 0.0, 0
 	}
+
+	// Track current PIDs to clean up old ones
+	currentPids := make(map[int32]bool)
 
 	var webKB, cliKB uint64
 	var webCPU float64
 	var webWorkers int
 
-	for _, p := range procs {
-		name, err := p.Name()
+	for _, pid := range pids {
+		currentPids[pid] = true
+
+		proc, exists := m.procs[pid]
+		if !exists {
+			var err error
+			proc, err = process.NewProcess(pid)
+			if err != nil {
+				continue
+			}
+			m.procs[pid] = proc
+		}
+
+		name, err := proc.Name()
 		if err != nil {
 			continue
 		}
@@ -64,21 +93,21 @@ func getPHPStats() (int, int, float64, int) {
 			continue
 		}
 
-		cmdline, err := p.Cmdline()
+		cmdline, err := proc.Cmdline()
 		if err != nil {
 			continue
 		}
 		cmdline = strings.ToLower(cmdline)
 
 		// Get Memory
-		memInfo, err := p.MemoryInfo()
+		memInfo, err := proc.MemoryInfo()
 		rss := uint64(0)
 		if err == nil && memInfo != nil {
 			rss = memInfo.RSS
 		}
 
-		// Get CPU
-		cpuPercent, err := p.CPUPercent()
+		// Get CPU - This is stateful on 'proc'
+		cpuPercent, err := proc.CPUPercent()
 		if err != nil {
 			cpuPercent = 0.0
 		}
@@ -89,17 +118,25 @@ func getPHPStats() (int, int, float64, int) {
 			webKB += rss
 			webCPU += cpuPercent
 			webWorkers++
+			// fmt.Printf("Found PHP-FPM: %s (PID: %d) CPU: %.2f%%\n", name, pid, cpuPercent)
 		} else if strings.Contains(cmdline, "artisan") || strings.Contains(cmdline, "serve") {
 			// CLI Process
 			cliKB += rss
 		}
 	}
 
+	// Cleanup old processes
+	for pid := range m.procs {
+		if !currentPids[pid] {
+			delete(m.procs, pid)
+		}
+	}
+
 	return int(webKB / 1024 / 1024), int(cliKB / 1024 / 1024), webCPU, webWorkers
 }
 
-func GetStatus() Status {
-	stats := GetSystemStats()
+func (m *Monitor) GetStatus() Status {
+	stats := m.GetSystemStats()
 
 	// Check FPM via Process Memory OR TCP Port
 	fpmStatus := stats.PhpWebMemoryMB > 0 || checkPHPFPM()

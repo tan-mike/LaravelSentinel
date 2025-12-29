@@ -24,17 +24,19 @@ export default function VirtualList({ height, width, itemCount, itemSize, childr
   const items = [];
   for (let i = startIndex; i < endIndex; i++) {
     items.push(
-      children({
-        index: i,
-        style: {
-          position: 'absolute',
-          top: 0,
-          left: 0,
-          width: '100%',
-          height: itemSize,
-          transform: `translateY(${i * itemSize}px)`,
-        },
-      })
+      <React.Fragment key={i}>
+        {children({
+          index: i,
+          style: {
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: itemSize,
+            transform: `translateY(${i * itemSize}px)`,
+          },
+        })}
+      </React.Fragment>
     );
   }
 

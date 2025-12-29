@@ -1,11 +1,8 @@
 {
-  "workspace_root": "/Users/mike/Development/",
+  "workspace_root": "",
   "host": "127.0.0.1",
   "port": 8888,
-  "ignored_projects": [
-    "/Users/mike/Development/tailor",
-    "/Users/mike/Development/tailor-management"
-  ],
+  "ignored_projects": [],
   "cpu_threshold": 10,
-  "nginx_log_path": "/Users/mike/Library/Application Support/Herd/Log/nginx-access.log"
+  "nginx_log_path": ""
 }

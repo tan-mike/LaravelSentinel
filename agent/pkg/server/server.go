@@ -38,6 +38,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/projects/routes", s.handleRoutes)
 	mux.HandleFunc("/projects/logs", s.handleLogs)
 	mux.HandleFunc("/projects/performance", s.handlePerformance)
+	mux.HandleFunc("/projects/performance/clear", s.handlePerformanceClear)
 	mux.HandleFunc("/projects/ingest", s.handleIngest) // Direct Telemetry Ingest
 
 	// Runner API

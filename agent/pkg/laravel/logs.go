@@ -44,12 +44,18 @@ func GetRecentLogs(projectPath string, linesToRead int) ([]string, error) {
 }
 
 type PerformanceEntry struct {
-	Method     string  `json:"method"`
-	URI        string  `json:"uri"`
+	Method      string      `json:"method"`
+	URI         string      `json:"uri"`
+	DurationMS  float64     `json:"duration_ms"`
+	MemoryMB    float64     `json:"memory_mb"`
+	QueryCount  int         `json:"query_count"`
+	SlowQueries []SlowQuery `json:"slow_queries"`
+	Timestamp   string      `json:"timestamp"` // Extracted from log line prefix if possible
+}
+
+type SlowQuery struct {
+	SQL        string  `json:"sql"`
 	DurationMS float64 `json:"duration_ms"`
-	MemoryMB   float64 `json:"memory_mb"`
-	QueryCount int     `json:"query_count"`
-	Timestamp  string  `json:"timestamp"` // Extracted from log line prefix if possible
 }
 
 // GetPerformanceLogs scans the log file for [SENTINEL_PERF] entries

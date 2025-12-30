@@ -44,7 +44,13 @@ func (s *Store) GetAll() []laravel.PerformanceEntry {
 	defer s.mu.RUnlock()
 
 	// Return copy
-	result := make([]laravel.PerformanceEntry, len(s.entries))
-	copy(result, s.entries)
-	return result
+	msgs := make([]laravel.PerformanceEntry, len(s.entries))
+	copy(msgs, s.entries)
+	return msgs
+}
+
+func (s *Store) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.entries = []laravel.PerformanceEntry{}
 }

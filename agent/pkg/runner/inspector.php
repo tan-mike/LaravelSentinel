@@ -66,6 +66,17 @@ if (!function_exists('sentinel_bind')) {
                      try {
                         $queries = \Illuminate\Support\Facades\DB::getQueryLog();
                         $data['query_count'] = count($queries);
+                        
+                        $data['slow_queries'] = [];
+                        foreach ($queries as $q) {
+                            if (isset($q['time']) && $q['time'] > 50) { // Threshold: 50ms
+                                $data['slow_queries'][] = [
+                                    'sql' => $q['query'],
+                                    'duration_ms' => $q['time'],
+                                    // 'bindings' => $q['bindings'] // Optional: include if safe
+                                ];
+                            }
+                        }
                     } catch (\Throwable $t) {}
                 }
 

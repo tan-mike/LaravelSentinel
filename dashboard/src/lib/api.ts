@@ -48,12 +48,18 @@ export interface LogsParsed {
     lines: string[];
 }
 
+export interface SlowQuery {
+    sql: string;
+    duration_ms: number;
+}
+
 export interface PerformanceEntry {
     method: string;
     uri: string;
     duration_ms: number;
     memory_mb: number;
     query_count: number;
+    slow_queries?: SlowQuery[];
     timestamp: string;
 }
 
@@ -66,6 +72,12 @@ export const api = {
       } catch {
         return [];
       }
+  },
+
+  clearPerformance: async (projectPath: string): Promise<void> => {
+      await fetch(`${BASE_URL}/projects/performance/clear?path=${encodeURIComponent(projectPath)}`, {
+          method: 'POST'
+      });
   },
 
   runnerStart: async (path: string, port: number, with_queue: boolean) => {

@@ -265,6 +265,20 @@ func (s *Server) handlePerformance(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(metrics)
 }
 
+func (s *Server) handlePerformanceClear(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.Store != nil {
+		s.Store.Clear()
+	}
+	// Also could truncate log file if we wanted, but for now just clear memory
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	if s.Watchdog == nil {
 		w.WriteHeader(http.StatusNoContent)

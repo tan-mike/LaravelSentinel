@@ -116,6 +116,18 @@ export default function Settings() {
                          <p className="text-xs text-gray-500 mt-1">Path to read suspect requests from.</p>
                      </div>
                  </div>
+                 
+                 <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">PHP-FPM Binary Path (Optional)</label>
+                    <input 
+                        type="text" 
+                        className="w-full bg-slate-900 border border-slate-700 rounded p-2 text-white font-mono text-sm"
+                        value={config.php_fpm_path || ""}
+                        onChange={e => setConfig({...config, php_fpm_path: e.target.value})}
+                        placeholder="/opt/homebrew/sbin/php-fpm"
+                    />
+                     <p className="text-xs text-gray-500 mt-1">Override auto-detection. Exact path to executable.</p>
+                 </div>
               </div>
 
               {/* Project Filtering */}

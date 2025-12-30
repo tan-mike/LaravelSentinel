@@ -8,55 +8,49 @@ import RouteExplorer from "@/components/RouteExplorer";
 import LogViewer from "@/components/LogViewer";
 import PerformanceAudit from "@/components/PerformanceAudit";
 
+// Removed PortSelectorModal
+
 function ProjectCard({ project, onViewRoutes, onViewLogs, onAudit }: { 
     project: Project; 
     onViewRoutes: () => void; 
     onViewLogs: () => void; 
     onAudit: () => void; 
 }) {
-    const [port, setPort] = useState(8000 + (project.path.length % 100)); // Simple unique-ish default
-    const [withQueue, setWithQueue] = useState(false);
     const [running, setRunning] = useState(false);
-    const [actualPort, setActualPort] = useState(0);
     const [loading, setLoading] = useState(false);
 
     // Initial check
     useEffect(() => {
         api.runnerStatus().then(status => {
+             // Backend now uses simple key for audit status, 
+             // but we kept ":web" suffix in GetStatus for compatibility?
+             // Let's check manager.go... yes, compositeKey := key + ":web"
              const key = project.path + ":web";
              if (status[key] && status[key].running) {
                  setRunning(true);
-                 setActualPort(status[key].port);
-                 setPort(status[key].port);
              }
         });
     }, [project.path]);
 
-    const handleStart = async () => {
+    const handleToggleAudit = async () => {
         setLoading(true);
         try {
-            await api.runnerStart(project.path, port, withQueue);
-            setRunning(true);
-            setActualPort(port);
-        } catch (e) {
-            alert("Failed to start runner: " + e);
+            if (running) {
+                await api.runnerStop(project.path);
+                setRunning(false);
+            } else {
+                // Send dummy port/queue as api expects them, but backend ignores
+                await api.runnerStart(project.path, 0, false);
+                setRunning(true);
+            }
+        } catch (e: any) {
+            alert("Failed to toggle audit: " + e.toString());
         }
         setLoading(false);
     };
 
-    const handleStop = async () => {
-        setLoading(true);
-        try {
-            await api.runnerStop(project.path);
-            setRunning(false);
-        } catch (e) {
-             alert("Failed to stop runner: " + e);
-        }
-        setLoading(false);
-    }
-
     return (
-        <div className="card glass">
+        <div className="card glass relative">
             <div className="flex justify-between items-start">
                 <div>
                     <h3 className="text-lg font-bold mb-1">{project.name}</h3>
@@ -65,8 +59,12 @@ function ProjectCard({ project, onViewRoutes, onViewLogs, onAudit }: {
                     </p>
                 </div>
                 {running && (
-                    <div className="badge bg-green-500/20 text-green-400 border-green-500/50 animate-pulse">
-                        Running on :{actualPort}
+                    <div className="badge bg-red-500/20 text-red-400 border-red-500/50 animate-pulse gap-2">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                        </span>
+                        Recording
                     </div>
                 )}
             </div>
@@ -86,47 +84,23 @@ function ProjectCard({ project, onViewRoutes, onViewLogs, onAudit }: {
             {/* Runner Controls */}
             <div className="bg-black/20 p-3 rounded border border-white/5">
                 <div className="flex items-center justify-between mb-2">
-                    <span className="text-xs font-bold text-gray-400 uppercase">Audit Server</span>
-                    {running && <a href={`http://127.0.0.1:${actualPort}`} target="_blank" className="text-xs text-blue-400 hover:underline">Open Browser ↗</a>}
+                    <span className="text-xs font-bold text-gray-400 uppercase">Telemetry</span>
+                    <a href={`http://${project.name}.test`} target="_blank" className="text-xs text-blue-400 hover:underline">Open App ↗</a>
                 </div>
                 
-                {!running ? (
-                    <div className="flex items-end gap-2">
-                        <div>
-                            <label className="text-[10px] text-gray-500 block mb-1">Port</label>
-                            <input 
-                                type="number" 
-                                className="input h-8 w-20 text-xs bg-black/40 border-white/10" 
-                                value={port} 
-                                onChange={(e) => setPort(parseInt(e.target.value))}
-                            />
-                        </div>
-                         <div className="flex items-center gap-2 mb-2">
-                            <input 
-                                type="checkbox" 
-                                checked={withQueue} 
-                                onChange={(e) => setWithQueue(e.target.checked)}
-                                className="checkbox checkbox-xs checkbox-primary"
-                            />
-                            <span className="text-xs text-gray-400">+ Queue</span>
-                        </div>
-                        <button 
-                            onClick={handleStart} 
-                            disabled={loading}
-                            className="btn bg-green-600 hover:bg-green-500 text-white text-xs h-8 flex-1"
-                        >
-                            {loading ? "..." : "▶ Start"}
-                        </button>
-                    </div>
-                ) : (
-                    <button 
-                        onClick={handleStop} 
-                        disabled={loading}
-                        className="btn bg-red-900/50 hover:bg-red-800/80 text-red-200 border-red-500/30 w-full text-xs h-8"
-                    >
-                        {loading ? "..." : "⏹ Stop Server"}
-                    </button>
-                )}
+                <button 
+                    onClick={handleToggleAudit} 
+                    disabled={loading}
+                    className={`btn w-full text-xs h-8 ${running 
+                        ? "bg-slate-800 hover:bg-slate-700 text-gray-300 border-slate-600" 
+                        : "bg-red-600 hover:bg-red-500 text-white border-red-500"
+                    }`}
+                >
+                    {loading ? "..." : (running ? "⏹ Stop Recording" : "⏺ Start Recording")}
+                </button>
+                <p className="text-[10px] text-gray-500 mt-2 text-center">
+                    {running ? "Refreshes will be captured." : "Enable to capture requests."}
+                </p>
             </div>
         </div>
     );

@@ -12,6 +12,7 @@ type Config struct {
 	IgnoredProjects []string `json:"ignored_projects"`
 	CpuThreshold    int      `json:"cpu_threshold"`
 	NginxLogPath    string   `json:"nginx_log_path"`
+	PhpFpmPath      string   `json:"php_fpm_path"` // Manual override
 }
 
 const ConfigFile = "sentinel-config.json"

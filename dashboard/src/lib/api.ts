@@ -14,6 +14,7 @@ export interface Config {
   ignored_projects?: string[];
   cpu_threshold?: number;
   nginx_log_path?: string;
+  php_fpm_path?: string;
 }
 
 export interface TelemetryStatus {

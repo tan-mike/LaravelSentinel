@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/mike/sentinel-agent/pkg/config"
@@ -188,11 +186,9 @@ func (s *Server) handleRunnerStart(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Calculate paths
-	homeDir, _ := os.UserHomeDir()
-	inspectorPath := filepath.Join(homeDir, ".sentinel", "inspector.php")
+	fmt.Printf("[Server] Received Audit Start Request for %s\n", req.Path)
 
-	if err := s.Runner.Start(req.Path, req.Port, req.WithQueue, inspectorPath); err != nil {
+	if err := s.Runner.EnableAudit(req.Path); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -210,7 +206,7 @@ func (s *Server) handleRunnerStop(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := s.Runner.Stop(req.Path); err != nil {
+	if err := s.Runner.DisableAudit(req.Path); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

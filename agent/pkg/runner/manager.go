@@ -3,150 +3,82 @@ package runner
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
+
+	_ "embed"
+
+	"github.com/mike/sentinel-agent/pkg/injector"
 )
 
-type ProcessType string
+//go:embed inspector.php
+var inspectorContent []byte
 
-const (
-	ProcessTypeWeb   ProcessType = "web"
-	ProcessTypeQueue ProcessType = "queue"
-)
-
-type RunnerProcess struct {
-	Cmd       *exec.Cmd
-	Port      int // Only for ProcessTypeWeb
-	Type      ProcessType
-	StartTime time.Time
-	Path      string
+type AuditStatus struct {
+	Path      string    `json:"path"`
+	StartTime time.Time `json:"start_time"`
+	Active    bool      `json:"active"`
 }
 
-// Manager handles multiple running processes
+// Manager handles the "Audit Mode" state for projects
 type Manager struct {
-	processes map[string]*RunnerProcess // Key: ProjectPath + Type
-	mu        sync.RWMutex
+	audits   map[string]*AuditStatus // Key: ProjectPath
+	mu       sync.RWMutex
+	injector *injector.Injector
+	baseDir  string // ~/.sentinel
 }
 
 func NewManager() *Manager {
+	home, _ := os.UserHomeDir()
+	baseDir := filepath.Join(home, ".sentinel")
+	os.MkdirAll(baseDir, 0755)
+
 	return &Manager{
-		processes: make(map[string]*RunnerProcess),
+		audits:   make(map[string]*AuditStatus),
+		baseDir:  baseDir,
+		injector: injector.New(inspectorContent),
 	}
 }
 
-func (m *Manager) Start(projectPath string, port int, withQueue bool, inspectorPath string) error {
+// EnableAudit injects the telemetry probe
+func (m *Manager) EnableAudit(projectPath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// 1. Start Web Server
-	webKey := projectPath + ":web"
-	if _, exists := m.processes[webKey]; exists {
-		return fmt.Errorf("web server already running for %s", projectPath)
+	if _, exists := m.audits[projectPath]; exists {
+		return fmt.Errorf("audit already active for this project")
 	}
 
-	// 0. Copy Inspector to Project Root (to avoid path/permission issues)
-	localInspectorName := "sentinel_inspector.php"
-	localInspectorPath := filepath.Join(projectPath, localInspectorName)
-
-	input, err := os.ReadFile(inspectorPath)
-	if err != nil {
-		return fmt.Errorf("failed to read global inspector: %v", err)
-	}
-	if err := os.WriteFile(localInspectorPath, input, 0644); err != nil {
-		return fmt.Errorf("failed to write local inspector: %v", err)
+	if err := m.injector.EnableAudit(projectPath); err != nil {
+		return fmt.Errorf("failed to inject audit probe: %v", err)
 	}
 
-	// php -S 127.0.0.1:<PORT> -t <PATH>/public -d auto_prepend_file=<INSPECTOR>
-	// php -d auto_prepend_file=<INSPECTOR> -S 127.0.0.1:<PORT> -t <PATH>/public
-	// We use ABSOLUTE path for auto_prepend_file to be safe regardless of -t (docroot)
-	addr := fmt.Sprintf("127.0.0.1:%d", port)
-	args := []string{
-		"-d", fmt.Sprintf("auto_prepend_file=%s", localInspectorPath),
-		"-S", addr,
-		"-t", projectPath + "/public",
-	}
-
-	cmd := exec.Command("php", args...)
-
-	// DEBUG: Connect to Agent's stdout/stderr for now
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Dir = projectPath // CRITICAL: Run from project root so inspector.php finds artisan
-
-	fmt.Printf("[Runner] Starting Web: php %v (in %s)\n", args, projectPath)
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("failed to start web server: %v", err)
-	}
-
-	m.processes[webKey] = &RunnerProcess{
-		Cmd:       cmd,
-		Port:      port,
-		Type:      ProcessTypeWeb,
-		StartTime: time.Now(),
+	m.audits[projectPath] = &AuditStatus{
 		Path:      projectPath,
+		StartTime: time.Now(),
+		Active:    true,
 	}
 
-	// 2. Start Queue Worker (Optional)
-	if withQueue {
-		queueKey := projectPath + ":queue"
-		if _, exists := m.processes[queueKey]; exists {
-			// Already running, skip or error? Let's skip nicely
-		} else {
-			// php artisan queue:work -d auto_prepend_file=<INSPECTOR>
-			// Use absolute path here too
-			localInspectorPath := filepath.Join(projectPath, "sentinel_inspector.php")
-			qArgs := []string{
-				"-d", fmt.Sprintf("auto_prepend_file=%s", localInspectorPath),
-				projectPath + "/artisan",
-				"queue:work",
-			}
-
-			qCmd := exec.Command("php", qArgs...)
-			qCmd.Dir = projectPath
-			if err := qCmd.Start(); err == nil {
-				m.processes[queueKey] = &RunnerProcess{
-					Cmd:       qCmd,
-					Type:      ProcessTypeQueue,
-					StartTime: time.Now(),
-					Path:      projectPath,
-				}
-			}
-		}
-	}
-
+	fmt.Printf("[Audit] Enabled for %s\n", projectPath)
 	return nil
 }
 
-func (m *Manager) Stop(projectPath string) error {
+// DisableAudit removes the telemetry probe
+func (m *Manager) DisableAudit(projectPath string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	webKey := projectPath + ":web"
-	queueKey := projectPath + ":queue"
-
-	// Kill Web
-	if p, exists := m.processes[webKey]; exists {
-		if p.Cmd.Process != nil {
-			p.Cmd.Process.Kill()
-		}
-		// Cleanup local inspector (best effort)
-		os.Remove(filepath.Join(p.Path, "sentinel_inspector.php"))
-		delete(m.processes, webKey)
+	if _, exists := m.audits[projectPath]; !exists {
+		return nil // Already disabled
 	}
 
-	// Kill Queue
-	if p, exists := m.processes[queueKey]; exists {
-		if p.Cmd.Process != nil {
-			p.Cmd.Process.Kill()
-		}
-		// Cleanup (duplicate remove is fine, it handles error silently usually, or we check)
-		// Actually web process owns the file usually, but same path.
-		delete(m.processes, queueKey)
+	if err := m.injector.DisableAudit(projectPath); err != nil {
+		return fmt.Errorf("failed to remove audit probe: %v", err)
 	}
 
+	delete(m.audits, projectPath)
+	fmt.Printf("[Audit] Disabled for %s\n", projectPath)
 	return nil
 }
 
@@ -155,13 +87,17 @@ func (m *Manager) GetStatus() map[string]interface{} {
 	defer m.mu.RUnlock()
 
 	status := make(map[string]interface{})
-	for key, p := range m.processes {
-		status[key] = map[string]interface{}{
-			"path":       p.Path,
-			"type":       p.Type,
-			"port":       p.Port,
-			"start_time": p.StartTime,
-			"running":    p.Cmd.ProcessState == nil, // simplistic check
+	for key, audit := range m.audits {
+		// Key matches old format for frontend compatibility if needed,
+		// but let's just use path as key for simpler logic?
+		// Old frontend expects "{path}:web". Let's keep that for now to minimize breakage
+		// until frontend is updated.
+		compositeKey := key + ":web"
+		status[compositeKey] = map[string]interface{}{
+			"path":       audit.Path,
+			"running":    audit.Active, // Matches "running" prop in frontend
+			"start_time": audit.StartTime,
+			"port":       0, // No port in audit mode
 		}
 	}
 	return status

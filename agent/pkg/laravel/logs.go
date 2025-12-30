@@ -94,3 +94,37 @@ func GetPerformanceLogs(projectPath string) ([]PerformanceEntry, error) {
 	// API usually returns list, frontend sorts.
 	return metrics, nil
 }
+
+type DeadlockEntry struct {
+	Timestamp string `json:"timestamp"`
+	Message   string `json:"message"`
+}
+
+// GetDeadlocks scans for database lock errors
+func GetDeadlocks(projectPath string) ([]DeadlockEntry, error) {
+	lines, err := GetRecentLogs(projectPath, 5000) // Look back further for errors
+	if err != nil {
+		return nil, err
+	}
+
+	var deadlocks []DeadlockEntry
+	for _, line := range lines {
+		// Check for MySQL/Postgres deadlock keywords
+		if strings.Contains(line, "Deadlock found") || strings.Contains(line, "Lock wait timeout exceeded") {
+			entry := DeadlockEntry{
+				Message: line,
+			}
+			// Extract timestamp [2024-...]
+			if len(line) > 21 && line[0] == '[' && line[20] == ']' {
+				entry.Timestamp = line[1:20]
+				// Clean up message to remove timestamp/env parts if possible
+				if len(line) > 22 {
+					entry.Message = strings.TrimSpace(line[22:])
+				}
+			}
+			deadlocks = append(deadlocks, entry)
+		}
+	}
+
+	return deadlocks, nil
+}

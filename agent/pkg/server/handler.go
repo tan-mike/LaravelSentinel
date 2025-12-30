@@ -291,3 +291,19 @@ func (s *Server) handleAlerts(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewEncoder(w).Encode(incident)
 }
+
+func (s *Server) handleDeadlocks(w http.ResponseWriter, r *http.Request) {
+	projectPath := r.URL.Query().Get("path")
+	if projectPath == "" {
+		http.Error(w, "Missing 'path' query parameter", http.StatusBadRequest)
+		return
+	}
+
+	deadlocks, err := laravel.GetDeadlocks(projectPath)
+	if err != nil {
+		// Return empty list on error to avoid breaking UI (e.g. log file missing)
+		deadlocks = []laravel.DeadlockEntry{}
+	}
+
+	json.NewEncoder(w).Encode(deadlocks)
+}

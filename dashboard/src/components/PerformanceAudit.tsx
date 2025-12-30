@@ -11,6 +11,7 @@ export default function PerformanceAudit({
   onClose: () => void;
 }) {
   const [metrics, setMetrics] = useState<PerformanceEntry[]>([]);
+  const [deadlocks, setDeadlocks] = useState<any[]>([]); // Use any for quickness or import DeadlockEntry
   const [loading, setLoading] = useState(true);
 
 
@@ -19,9 +20,14 @@ export default function PerformanceAudit({
         
         async function fetch() {
             try {
-                const data = await api.fetchPerformance(projectPath);
-                if (mounted && data) {
-                    setMetrics(data.reverse()); 
+                const [perfData, lockData] = await Promise.all([
+                    api.fetchPerformance(projectPath),
+                    api.fetchDeadlocks(projectPath)
+                ]);
+
+                if (mounted) {
+                    if (perfData) setMetrics(perfData.reverse());
+                    if (lockData) setDeadlocks(lockData.reverse());
                     setLoading(false);
                 }
             } catch (e) {
@@ -110,6 +116,34 @@ export default function PerformanceAudit({
                 </div>
             ) : (
                 <div className="space-y-6">
+                    {/* Critical Incidents (Deadlocks) */}
+                    {deadlocks.length > 0 && (
+                        <div className="card glass p-0 overflow-hidden border-red-600/50 shadow-[0_0_15px_rgba(220,38,38,0.3)] animate-pulse-slow">
+                             <div className="p-3 bg-red-900/40 border-b border-red-600/50 flex justify-between items-center">
+                                <h3 className="font-bold text-red-100 text-sm uppercase flex items-center gap-2">
+                                    <span>☠️ Critical Incidents Detected</span>
+                                    <span className="badge bg-red-600 border-none text-white text-xs">{deadlocks.length}</span>
+                                </h3>
+                            </div>
+                            <table className="w-full text-left text-xs">
+                                <thead className="text-red-200/50 bg-red-900/20">
+                                    <tr>
+                                        <th className="p-2 w-32">Time</th>
+                                        <th className="p-2">Error Message</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-red-500/10">
+                                    {deadlocks.map((d, i) => (
+                                        <tr key={i} className="hover:bg-red-500/10">
+                                            <td className="p-2 font-mono text-red-300">{d.timestamp}</td>
+                                            <td className="p-2 font-mono text-white break-words">{d.message}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+
                     {/* Top Stats */}
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         {/* Slowest Requests */}

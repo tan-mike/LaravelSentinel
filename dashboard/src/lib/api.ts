@@ -63,7 +63,22 @@ export interface PerformanceEntry {
     timestamp: string;
 }
 
+export interface DeadlockEntry {
+    timestamp: string;
+    message: string;
+}
+
 export const api = {
+  fetchDeadlocks: async (projectPath: string): Promise<DeadlockEntry[]> => {
+      try {
+        const res = await fetch(`${BASE_URL}/projects/deadlocks?path=${encodeURIComponent(projectPath)}`);
+        if(!res.ok) return [];
+        return res.json();
+      } catch {
+        return [];
+      }
+  },
+
   fetchPerformance: async (projectPath: string): Promise<PerformanceEntry[]> => {
       try {
         const res = await fetch(`${BASE_URL}/projects/performance?path=${encodeURIComponent(projectPath)}`);
